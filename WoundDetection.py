@@ -86,7 +86,7 @@ def extract_wound_properties(original, mask):
 
 
 # Streamlit APP UI
-st.title("🩹 Wound Detection and Analysis App")
+st.title("Wound Detection and Analysis App")
 
 uploaded_file = st.file_uploader("Upload a wound image", type=["jpg", "jpeg", "png"])
 

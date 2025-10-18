@@ -53,7 +53,7 @@ def wound_chat_assistant(wound_props):
         st.session_state.messages = [system_message, user_message]
 
     # Display the UI
-    st.markdown("### 💬 AI Medical Assistant")
+    st.markdown("### AI Medical Assistant")
     
     with st.expander("Chat with AI about the wound", expanded=True):
         user_input = st.chat_input("Ask a question about the wound...")
