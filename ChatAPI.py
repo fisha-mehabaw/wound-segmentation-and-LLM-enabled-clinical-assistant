@@ -18,7 +18,7 @@ def call_deepseek_api(user_input):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "deepseek/deepseek-chat:free",
+        "model": "deepseek/deepseek-chat",
         "messages": st.session_state.messages + [{"role": "user", "content": user_input}],
     }
 
