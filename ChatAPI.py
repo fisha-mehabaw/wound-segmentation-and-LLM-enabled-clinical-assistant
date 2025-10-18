@@ -18,7 +18,8 @@ def call_deepseek_api(user_input):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "deepseek/deepseek-chat",
+        # "model": "deepseek/deepseek-chat",
+        "model": "openai/gpt-4o-mini",
         "messages": st.session_state.messages + [{"role": "user", "content": user_input}],
     }
 
