@@ -11,7 +11,7 @@ IMG_HEIGHT = 256
 IMG_WIDTH = 256
 
 # Config
-st.set_page_config(page_title="Wound Detection App", page_icon="🩹", layout="wide")
+st.set_page_config(page_title="Wound Detection App", layout="wide")
 
 # Load model
 @st.cache_resource
@@ -42,7 +42,7 @@ def overlay_color_on_mask(image, mask, color=(255, 215, 0)):
 
 
 # Extract properties
-def extract_wound_properties(original, mask):
+# def extract_wound_properties(original, mask):
     props = {}
     binary = mask.squeeze().astype(np.uint8)
 
@@ -84,9 +84,91 @@ def extract_wound_properties(original, mask):
 
     return props, original
 
+def extract_wound_properties(original, mask):
+    props = {}
+    binary = mask.squeeze().astype(np.uint8)
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) == 0:
+        return props, original
+
+    gray = cv2.cvtColor(original, cv2.COLOR_RGB2GRAY)
+
+    # Accumulators
+    total_area = 0
+    total_perimeter = 0
+    circularities = []
+    colors = []
+    contrasts = []
+    homogeneities = []
+    edge_strengths = []
+    severities = []
+
+    for cnt in contours:
+        # Draw bounding box
+        x, y, w, h = cv2.boundingRect(cnt)
+        cv2.rectangle(original, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Area and perimeter
+        area = cv2.contourArea(cnt)
+        perimeter = cv2.arcLength(cnt, True)
+        total_area += area
+        total_perimeter += perimeter
+
+        # Circularity
+        circularity = 4 * np.pi * (area / (perimeter**2)) if perimeter > 0 else 0
+        circularities.append(circularity)
+
+        # Color (mean of wound pixels)
+        mask_region = np.zeros_like(binary)
+        cv2.drawContours(mask_region, [cnt], -1, 1, -1)
+        region_pixels = original[mask_region.astype(bool)]
+        if region_pixels.size > 0:
+            colors.append(np.mean(region_pixels, axis=0))
+
+        # Texture
+        glcm = graycomatrix(gray, [1], [0], levels=256, symmetric=True, normed=True)
+        contrast = graycoprops(glcm, 'contrast')[0, 0]
+        homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
+        contrasts.append(contrast)
+        homogeneities.append(homogeneity)
+
+        # Edge strength
+        edges = cv2.Canny(gray, 100, 200)
+        edge_strength = np.mean(edges[mask_region.astype(bool)])
+        edge_strengths.append(edge_strength)
+
+        # Severity index
+        severity = (contrast + edge_strength + (1 - circularity)) / 3
+        severities.append(severity)
+
+    # Final output properties
+    if len(contours)>1:
+        props["Total Area (pixels)"] = int(total_area)
+        props["Total Perimeter"] = round(total_perimeter, 2)
+        props["Mean Circularity"] = round(np.mean(circularities), 3)
+        props["Mean Color (R,G,B)"] = tuple(map(int, np.mean(colors, axis=0)))
+        props["Mean Texture Contrast"] = round(np.mean(contrasts), 3)
+        props["Mean Texture Homogeneity"] = round(np.mean(homogeneities), 3)
+        props["Mean Edge Sharpness"] = round(np.mean(edge_strengths), 2)
+        props["Mean Severity Index"] = round(np.mean(severities), 3)
+    else:
+        props["Area (pixels)"] = int(total_area)
+        props["Perimeter"] = round(total_perimeter, 2)
+        props["Circularity"] = round(np.mean(circularities), 3)
+        props["Color (R,G,B)"] = tuple(map(int, np.mean(colors, axis=0)))
+        props["Texture Contrast"] = round(np.mean(contrasts), 3)
+        props["Texture Homogeneity"] = round(np.mean(homogeneities), 3)
+        props["Edge Sharpness"] = round(np.mean(edge_strengths), 2)
+        props["Severity Index"] = round(np.mean(severities), 3)
+
+
+    return props, original
+
 
 # Streamlit APP UI
-st.title("Wound Detection and Analysis App")
+st.title("Wound Segmentation and Analysis App")
 
 uploaded_file = st.file_uploader("Upload a wound image", type=["jpg", "jpeg", "png"])
 
@@ -96,7 +178,7 @@ if uploaded_file:
 
     mask_pred = predict_mask(img_array)
     if mask_pred is None:
-        st.warning("⚠️ Sorry, I am unable to detect a wound in the uploaded file.")
+        st.warning("Sorry, I am unable to detect a wound in the uploaded file.")
     else:
         img_uint8 = (img_array * 255).astype(np.uint8)
         img_rgb = cv2.cvtColor(img_uint8, cv2.COLOR_BGR2RGB)
@@ -104,7 +186,8 @@ if uploaded_file:
         img_colored = overlay_color_on_mask(img_rgb.copy(), mask_pred)
         props, image_with_box = extract_wound_properties(img_colored, mask_pred)
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
+
         with col1:
             st.markdown("**Uploaded Wound image**")
             st.image(img_rgb, use_column_width=True)
@@ -113,14 +196,16 @@ if uploaded_file:
             st.markdown("**Detected Wound**")
             st.image(image_with_box, use_column_width=True)
 
-        with st.expander("🩻 Wound Properties", expanded=False):
+        with col3:
+            st.markdown("**Wound Properties**")
             for k, v in props.items():
                 st.markdown(f"- **{k}**: {v}")
+
 
         st.markdown("---")
 
         # LLM Chat
-        # clear_session()
+        #clear_session()
         if props is not None:
             wound_chat_assistant(props)
             # wound_chat(props)
